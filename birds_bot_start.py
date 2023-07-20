@@ -23,7 +23,6 @@ def database_filling(message, csv_file):
         new_user = User(name=message.chat.first_name, chat_id=message.chat.id)
         session.add(new_user)
         session.commit()
-        a = new_user.id
         with open(csv_file, 'r', encoding='UTF-8') as csv_file:
             reader = csv.DictReader(csv_file)
             for row in reader:
@@ -33,14 +32,48 @@ def database_filling(message, csv_file):
                 session.add(new_bird)
                 try:
                     session.commit()
-                    id = new_bird.id
+                    bird_id = new_bird.id
                 except exc.IntegrityError:
                     session.rollback()
-                    id = session.query(Bird).filter(Bird.scientific_name == scientific_name).first().id
-                userbird = UserBird(user_id=new_user.id, bird_id=id)
+                    bird_id = session.query(Bird).filter(Bird.scientific_name == scientific_name).first().id
+                userbird = UserBird(user_id=new_user.id, bird_id=bird_id)
                 session.add(userbird)
                 session.commit()
-            bot.send_message(message.chat.id, 'Список птиц создан')
+        bot.send_message(message.chat.id, 'Список птиц создан')
+    else:
+        with open(csv_file, 'r', encoding='UTF-8') as csv_file:
+            reader = csv.DictReader(csv_file)
+            identical = True
+            new_birds = []
+            for row in reader:
+                scientific_name = row.get('Scientific Name')
+                common_name = row.get('Common Name')
+                query = session.query(Bird.common_name,
+                                      Bird.scientific_name).join(UserBird).join(User).filter(
+                    User.chat_id == message.chat.id).all()
+                if (common_name, scientific_name) in query:
+                    continue
+                else:
+                    identical = False
+                    new_birds.append(common_name+'\n')
+                    new_bird = Bird(common_name=common_name, scientific_name=scientific_name)
+                    session.add(new_bird)
+                    try:
+                        session.commit()
+                        bird_id = new_bird.id
+                    except exc.IntegrityError:
+                        session.rollback()
+                        bird_id = session.query(Bird).filter(Bird.scientific_name == scientific_name).first().id
+                    new_userbird = UserBird(user_id=user.id, bird_id=bird_id)
+                    session.add(new_userbird)
+                    session.commit()
+        if identical:
+            msg = 'Ваш список птиц не изменился'
+        else:
+            msg = f'Список птиц изменён. Добавлены:\n'
+            for x in new_birds:
+                msg += x
+        bot.send_message(message.chat.id, msg)
 
 
 @bot.message_handler(commands=['start'])
@@ -63,7 +96,6 @@ def get_csv(message):
         bot.send_message(message.chat.id, 'Файл не соответствует образцу')
         return
     database_filling(message, csv_file)
-
 
 
 bot.infinity_polling()

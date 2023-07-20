@@ -14,7 +14,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     chat_id = Column(Integer, nullable=False)
-    birds = relationship('UserBird', backref='user')
+    bird = relationship('UserBird', backref='user')
 
 
 class Bird(Base):
@@ -22,7 +22,7 @@ class Bird(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     common_name = Column(String(100), nullable=False, unique=True)
     scientific_name = Column(String(100), nullable=False, unique=True)
-    users = relationship('UserBird', backref='bird')
+    user = relationship('UserBird', backref='bird')
 
 
 class UserBird(Base):
@@ -33,4 +33,5 @@ class UserBird(Base):
 
 
 if __name__ == '__main__':
+    # Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
