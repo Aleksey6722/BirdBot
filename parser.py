@@ -10,6 +10,7 @@ headers = {"Accept-Language": "ru"}
 main_page = requests.get(main_url, headers=headers)
 
 
+
 def get_bird_info(bird_page):
     soup = BeautifulSoup(bird_page.content, 'lxml')
     h1 = soup.find('h1')
@@ -42,7 +43,8 @@ for tag in link_tags:
     result.append({'common_name': rus_name,
                    'scientific_name': info.get('scientific_name'),
                    'latitude': info.get('latitude'),
-                   'longitude': info.get('longitude')})
-
+                   'longitude': info.get('longitude'),
+                   'url': bird_url})
+d=result
 pass
 

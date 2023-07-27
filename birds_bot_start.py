@@ -8,13 +8,14 @@ TOKEN = os.getenv('BIRDS_BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 
-def checking_csv(csv_file):
-    example = ['Row #', 'Taxon Order', 'Category', 'Common Name', 'Scientific Name', 'Count', 'Location', 'S/P',
-               'Date', 'LocID', 'SubID', 'Exotic', 'Countable']
-    with open(csv_file, 'r') as csv_file:
-        reader = csv.reader(csv_file)
-        first_row = next(reader)
-        return first_row == example
+def checking_csv(csv_file_dir):
+    with open(csv_file_dir, 'r') as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            scientific_name = row.get('Scientific Name')
+            if not scientific_name:
+                return False
+        return True
 
 
 def database_filling(message, csv_file):
@@ -26,9 +27,8 @@ def database_filling(message, csv_file):
         with open(csv_file, 'r', encoding='UTF-8') as csv_file:
             reader = csv.DictReader(csv_file)
             for row in reader:
-                common_name = row.get('Common Name')
                 scientific_name = row.get('Scientific Name')
-                new_bird = Bird(common_name=common_name, scientific_name=scientific_name)
+                new_bird = Bird(scientific_name=scientific_name)
                 session.add(new_bird)
                 try:
                     session.commit()
@@ -47,16 +47,14 @@ def database_filling(message, csv_file):
             new_birds = []
             for row in reader:
                 scientific_name = row.get('Scientific Name')
-                common_name = row.get('Common Name')
-                query = session.query(Bird.common_name,
-                                      Bird.scientific_name).join(UserBird).join(User).filter(
+                query = session.query(Bird.scientific_name).join(UserBird).join(User).filter(
                     User.chat_id == message.chat.id).all()
-                if (common_name, scientific_name) in query:
+                if (scientific_name,) in query:
                     continue
                 else:
                     identical = False
-                    new_birds.append(common_name+'\n')
-                    new_bird = Bird(common_name=common_name, scientific_name=scientific_name)
+                    new_birds.append(scientific_name+'\n')
+                    new_bird = Bird(scientific_name=scientific_name)
                     session.add(new_bird)
                     try:
                         session.commit()
@@ -76,26 +74,22 @@ def database_filling(message, csv_file):
         bot.send_message(message.chat.id, msg)
 
 
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(message.chat.id, 'Hello')
-
-
 @bot.message_handler(content_types=['document'])
 def get_csv(message):
-    if message.document.mime_type != 'text/csv':
+    file_name = message.document.file_name
+    if file_name.split('.')[1] != 'csv':
         bot.send_message(message.chat.id, 'Неверный формат файла. Отправьте файл CSV')
         return
-    file_name = message.document.file_name
     file_info = bot.get_file(message.document.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
-    csv_file = os.path.join(os.curdir, 'temp', file_name)
-    with open(csv_file, 'wb') as file:
+    csv_file_dir = os.path.join(os.curdir, 'temp', file_name)
+    with open(csv_file_dir, 'wb') as file:
         file.write(downloaded_file)
-    if not checking_csv(csv_file):
+    if not checking_csv(csv_file_dir):
         bot.send_message(message.chat.id, 'Файл не соответствует образцу')
+        os.remove(csv_file_dir)
         return
-    database_filling(message, csv_file)
-
+    database_filling(message, csv_file_dir)
+    os.remove(csv_file_dir)
 
 bot.infinity_polling()

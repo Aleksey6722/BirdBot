@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, String, Integer, Column, ForeignKey
+from sqlalchemy import create_engine, String, Integer, Float, Column, ForeignKey
 from sqlalchemy.orm import Session, declarative_base, relationship
 import os
 
@@ -20,7 +20,6 @@ class User(Base):
 class Bird(Base):
     __tablename__ = 'bird'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    common_name = Column(String(100), nullable=False, unique=True)
     scientific_name = Column(String(100), nullable=False, unique=True)
     user = relationship('UserBird', backref='bird')
 
@@ -32,6 +31,15 @@ class UserBird(Base):
     bird_id = Column(Integer(), ForeignKey('bird.id'))
 
 
+class Region(Base):
+    __tablename__ = 'region'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    point = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    user_id = Column(Integer(), ForeignKey('user.id'))
+
+
 if __name__ == '__main__':
-    # Base.metadata.drop_all(engine)
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
