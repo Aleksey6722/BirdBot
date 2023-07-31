@@ -33,11 +33,12 @@ class UserBird(Base):
 
 class Region(Base):
     __tablename__ = 'region'
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    point = Column(Float, nullable=False)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
-    user_id = Column(Integer(), ForeignKey('user.id'))
+    id = Column(Integer, autoincrement=True)
+    name = Column(String(100), primary_key=True, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    radius = Column(Integer, nullable=True)
+    user_id = Column(Integer(), ForeignKey('user.id'),  primary_key=True)
 
 
 if __name__ == '__main__':

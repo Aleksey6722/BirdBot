@@ -3,7 +3,7 @@ import os
 import csv
 from sqlalchemy import exc
 
-from models import session, Bird, User, UserBird
+from models import session, Bird, User, UserBird, Region
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
@@ -91,5 +91,67 @@ def get_csv(message):
         return
     database_filling(message, csv_file_dir)
     os.remove(csv_file_dir)
+
+
+@bot.message_handler(commands=['setregion'])
+def set_name(message):
+    bot.send_message(message.chat.id, 'Введите название района поиска')
+    bot.register_next_step_handler(message, callback=name_validate)
+
+
+def name_validate(message):
+    if len(message.text) > 200:
+        bot.send_message(message.chat.id, 'Название района должно быть не более 100 символов')
+        set_name(message)
+        return
+    user = session.query(User).filter(User.chat_id == message.chat.id).first()
+    if not user:
+        user = User(name=message.chat.first_name, chat_id=message.chat.id)
+        session.add(user)
+        session.commit()
+    region = Region(name=message.text, user_id=user.id)
+    session.add(region)
+    try:
+        session.commit()
+        get_coords(message, region)
+    except exc.IntegrityError:
+        session.rollback()
+        bot.send_message(message.chat.id, f'Район "{message.text}" уже существует. '
+                                          f'Для удаления введите команду /getregions ')
+
+
+def get_coords(message, region):
+    bot.send_message(message.chat.id, 'Введите через точку с запятой координаты центра района поиска (широта; долгота)')
+    bot.register_next_step_handler(message, callback=coords_validate, region=region)
+
+
+def coords_validate(message, region):
+    try:
+        latitude = message.text.split(';')[0].strip()
+        longitude = message.text.split(';')[1].strip()
+        latitude = float(latitude)
+        longitude = float(longitude)
+        region.latitude = latitude
+        region.longitude = longitude
+        session.add(region)
+        session.commit()
+        bot.send_message(message.chat.id, 'Введите радиус в метрах')
+        bot.register_next_step_handler(message, callback=radius_validate, region=region)
+    except:
+        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз')
+        bot.register_next_step_handler(message, callback=coords_validate, region=region)
+
+
+def radius_validate(message, region):
+    try:
+        radius = int(message.text)
+        region.radius = radius
+        session.add(region)
+        session.commit()
+        bot.send_message(message.chat.id, f'Регион "{region.name}" создан!')
+    except:
+        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз')
+        bot.register_next_step_handler(message, callback=radius_validate, region=region)
+
 
 bot.infinity_polling()
