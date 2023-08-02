@@ -33,11 +33,10 @@ class UserBird(Base):
 
 class Region(Base):
     __tablename__ = 'region'
-    id = Column(Integer, autoincrement=True)
     name = Column(String(100), primary_key=True, nullable=False)
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    radius = Column(Integer, nullable=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    radius = Column(Integer, nullable=False)
     user_id = Column(Integer(), ForeignKey('user.id'),  primary_key=True)
 
 

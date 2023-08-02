@@ -1,9 +1,15 @@
 import telebot
 import os
 import csv
+import schedule
+
 from sqlalchemy import exc
+import haversine
 
 from models import session, Bird, User, UserBird, Region
+from webparser import parse_birds_website
+
+
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
@@ -100,7 +106,7 @@ def set_name(message):
 
 
 def name_validate(message):
-    if len(message.text) > 200:
+    if len(message.text) > 100:
         bot.send_message(message.chat.id, 'Название района должно быть не более 100 символов')
         set_name(message)
         return
@@ -109,15 +115,13 @@ def name_validate(message):
         user = User(name=message.chat.first_name, chat_id=message.chat.id)
         session.add(user)
         session.commit()
-    region = Region(name=message.text, user_id=user.id)
-    session.add(region)
-    try:
-        session.commit()
-        get_coords(message, region)
-    except exc.IntegrityError:
-        session.rollback()
+    region = session.query(Region).filter(Region.name == message.text).filter(Region.user_id == user.id).first()
+    if region:
         bot.send_message(message.chat.id, f'Район "{message.text}" уже существует. '
                                           f'Для удаления введите команду /getregions ')
+        return
+    region = Region(name=message.text, user_id=user.id)
+    get_coords(message, region)
 
 
 def get_coords(message, region):
@@ -131,10 +135,12 @@ def coords_validate(message, region):
         longitude = message.text.split(';')[1].strip()
         latitude = float(latitude)
         longitude = float(longitude)
+        if not(-90 < latitude < 90):
+            raise ValueError
+        if not(-180 < longitude < 180):
+            raise ValueError
         region.latitude = latitude
         region.longitude = longitude
-        session.add(region)
-        session.commit()
         bot.send_message(message.chat.id, 'Введите радиус в метрах')
         bot.register_next_step_handler(message, callback=radius_validate, region=region)
     except:
@@ -154,4 +160,27 @@ def radius_validate(message, region):
         bot.register_next_step_handler(message, callback=radius_validate, region=region)
 
 
+def sending_notice():
+    regions = session.query(Region).all()
+    if not regions:
+        return
+    parsing_result = parse_birds_website()
+    for region in regions:
+        birds_in_region = []
+        for bird in parsing_result:
+            bird_point = float(bird.get('latitude')), float(bird.get('longitude'))
+            region_point = float(region.latitude),  float(region.longitude)
+            dist = haversine.haversine(bird_point, region_point)*1000
+            if dist <= region.radius:
+                birds_in_region.append(bird)
+        if len(birds_in_region) != 0:
+            users_list = session.query(Bird.scientific_name).join(UserBird).filter(
+                UserBird.user_id == region.user_id).all()
+            names_of_userbirds = [bird[0] for bird in users_list]
+            filtered_list = list(filter(lambda x: x.get('scientific_name') not in names_of_userbirds, birds_in_region))
+            pass
+
+
+sending_notice()
+# schedule.every(1).minute.do(bot.send_message(message.chat.id, str(parse_birds_website())))
 bot.infinity_polling()
