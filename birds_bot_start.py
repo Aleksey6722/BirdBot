@@ -4,13 +4,14 @@ import os
 import csv
 import schedule
 import time
+import requests
+import json
 
 from sqlalchemy import exc
 import haversine
 
 from models import session, Bird, User, UserBird, Region
 from webparser import parse_birds_website
-
 
 
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
@@ -52,7 +53,8 @@ def database_filling(message, csv_file):
     else:
         with open(csv_file, 'r', encoding='UTF-8') as csv_file:
             reader = csv.DictReader(csv_file)
-            identical = True
+            is_identical = True
+            is_first_list = False if session.query(UserBird).filter(UserBird.user_id == user.id).first() else True
             new_birds = []
             for row in reader:
                 scientific_name = row.get('Scientific Name')
@@ -61,7 +63,7 @@ def database_filling(message, csv_file):
                 if (scientific_name,) in query:
                     continue
                 else:
-                    identical = False
+                    is_identical = False
                     new_birds.append(scientific_name+'\n')
                     new_bird = Bird(scientific_name=scientific_name)
                     session.add(new_bird)
@@ -74,8 +76,10 @@ def database_filling(message, csv_file):
                     new_userbird = UserBird(user_id=user.id, bird_id=bird_id)
                     session.add(new_userbird)
                     session.commit()
-        if identical:
+        if is_identical:
             msg = 'Ваш список птиц не изменился'
+        elif is_first_list:
+            msg = 'Список птиц создан'
         else:
             msg = f'Список птиц изменён. Добавлены:\n'
             for x in new_birds:
@@ -194,9 +198,16 @@ def get_region(message):
                                                                           str(region.name))
             markup.add(del_btn)
             bot.send_message(message.chat.id, msg)
-            bot.send_location(message.chat.id, region.latitude, region.longitude, horizontal_accuracy=1500,
-                              reply_markup=markup)
-
+            # bot.send_location(message.chat.id, region.latitude, region.longitude, horizontal_accuracy=1500,
+            #                   reply_markup=markup)
+            url = f'https://api.telegram.org/bot{TOKEN}/sendlocation?chat_id={message.chat.id}&' \
+                  f'latitude={region.latitude}&longitude={region.longitude}'
+            # data = {'chat_id': message.chat.id,
+            #         'latitude': region.latitude,
+            #         'longitude': region.longitude,
+            #         'reply_markup': json.dumps(markup.to_dict())}
+            request = requests.post(url).json()
+            pass
     else:
         bot.send_message(message.chat.id, 'У Вас нет ни одного района для отслеживания. Введите команду '
                                           '/setregion для создания.')
@@ -208,7 +219,7 @@ def delete_region(callback):
     region_name = callback.data.split(',')[2]
     session.query(Region).filter(Region.user_id == user_id).filter(Region.name == region_name).delete()
     session.commit()
-    bot.send_message(callback.message.chat.id, 'Уведомление удалено!')
+    bot.send_message(callback.message.chat.id, 'Район удалён!')
 
 
 @bot.message_handler(commands=['deletelist'])
@@ -252,7 +263,6 @@ def sending_notice():
                         time.sleep(1)
                     bot.send_message(user.chat_id, msg)
                     count_sended += 1
-
 
 
 # sending_notice()
