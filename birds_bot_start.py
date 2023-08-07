@@ -85,6 +85,8 @@ def database_filling(message, csv_file):
 
 @bot.message_handler(content_types=['document'])
 def get_csv(message):
+    if not os.path.exists('temp'):
+        os.makedirs('temp')
     file_name = message.document.file_name
     if file_name.split('.')[1] != 'csv':
         bot.send_message(message.chat.id, 'Неверный формат файла. Отправьте файл CSV')
@@ -104,13 +106,19 @@ def get_csv(message):
 
 @bot.message_handler(commands=['setregion'])
 def set_name(message):
-    bot.send_message(message.chat.id, 'Введите название района поиска')
+    markup = types.InlineKeyboardMarkup()
+    cansel_btn = types.InlineKeyboardButton('Отмена', callback_data='cansel')
+    markup.add(cansel_btn)
+    bot.send_message(message.chat.id, 'Введите название района поиска', reply_markup=markup)
     bot.register_next_step_handler(message, callback=name_validate)
 
 
 def name_validate(message):
+    markup = types.InlineKeyboardMarkup()
+    cansel_btn = types.InlineKeyboardButton('Отмена', callback_data='cansel')
+    markup.add(cansel_btn)
     if len(message.text) > 100:
-        bot.send_message(message.chat.id, 'Название района должно быть не более 100 символов')
+        bot.send_message(message.chat.id, 'Название района должно быть не более 100 символов', reply_markup=markup)
         set_name(message)
         return
     user = session.query(User).filter(User.chat_id == message.chat.id).first()
@@ -124,15 +132,16 @@ def name_validate(message):
                                           f'Для удаления введите команду /getregions ')
         return
     region = Region(name=message.text, user_id=user.id)
-    get_coords(message, region)
+    get_coords(message, region, markup)
 
 
-def get_coords(message, region):
-    bot.send_message(message.chat.id, 'Введите через точку с запятой координаты центра района поиска (широта; долгота)')
-    bot.register_next_step_handler(message, callback=coords_validate, region=region)
+def get_coords(message, region, markup):
+    bot.send_message(message.chat.id, 'Введите через точку с запятой координаты центра '
+                                      'района поиска (широта; долгота)', reply_markup=markup)
+    bot.register_next_step_handler(message, callback=coords_validate, region=region, markup=markup)
 
 
-def coords_validate(message, region):
+def coords_validate(message, region, markup):
     try:
         latitude = message.text.split(';')[0].strip()
         longitude = message.text.split(';')[1].strip()
@@ -144,14 +153,14 @@ def coords_validate(message, region):
             raise ValueError
         region.latitude = latitude
         region.longitude = longitude
-        bot.send_message(message.chat.id, 'Введите радиус в метрах')
-        bot.register_next_step_handler(message, callback=radius_validate, region=region)
+        bot.send_message(message.chat.id, 'Введите радиус в метрах', reply_markup=markup)
+        bot.register_next_step_handler(message, callback=radius_validate, region=region, markup=markup)
     except:
-        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз')
-        bot.register_next_step_handler(message, callback=coords_validate, region=region)
+        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз', reply_markup=markup)
+        bot.register_next_step_handler(message, callback=coords_validate, region=region, markup=markup)
 
 
-def radius_validate(message, region):
+def radius_validate(message, region, markup):
     try:
         radius = int(message.text)
         region.radius = radius
@@ -159,15 +168,25 @@ def radius_validate(message, region):
         session.commit()
         bot.send_message(message.chat.id, f'Регион "{region.name}" создан!')
     except:
-        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз')
-        bot.register_next_step_handler(message, callback=radius_validate, region=region)
+        bot.send_message(message.chat.id, 'Введены некорректные значения. Попробуйте ещё раз', reply_markup=markup)
+        bot.register_next_step_handler(message, callback=radius_validate, region=region, markup=markup)
+
+
+@bot.callback_query_handler(func=lambda callback: callback.data == 'cansel')
+def delete_region(callback):
+    bot.send_message(callback.message.chat.id, 'Ваши действия отменены')
+    bot.clear_step_handler(callback.message)
 
 
 @bot.message_handler(commands=['getregions'])
 def get_region(message):
     user = session.query(User).filter(User.chat_id == message.chat.id).first()
+    if not user:
+        user = User(name=message.chat.first_name, chat_id=message.chat.id)
+        session.add(user)
+        session.commit()
     regions = session.query(Region).join(User).filter(Region.user_id == user.id).all()
-    if len(regions) != 0:
+    if len(regions):
         for region in regions:
             markup = types.InlineKeyboardMarkup()
             msg = f'Район "{region.name}"'
@@ -179,7 +198,7 @@ def get_region(message):
                               reply_markup=markup)
 
     else:
-        bot.send_message(message.chat.id, 'У Вас нет ни одного района для отслеживания. Введите команду'
+        bot.send_message(message.chat.id, 'У Вас нет ни одного района для отслеживания. Введите команду '
                                           '/setregion для создания.')
 
 
@@ -190,6 +209,18 @@ def delete_region(callback):
     session.query(Region).filter(Region.user_id == user_id).filter(Region.name == region_name).delete()
     session.commit()
     bot.send_message(callback.message.chat.id, 'Уведомление удалено!')
+
+
+@bot.message_handler(commands=['deletelist'])
+def delete_list(message):
+    user = session.query(User).filter(User.chat_id == message.chat.id).first()
+    a_list = session.query(UserBird).filter(UserBird.user_id == user.id).all()
+    if len(a_list) != 0:
+        session.query(UserBird).filter(UserBird.user_id == user.id).delete()
+        session.commit()
+        bot.send_message(message.chat.id, 'Ваш список птиц удалён')
+    else:
+        bot.send_message(message.chat.id, 'У вас нет списка птиц')
 
 
 def sending_notice():
@@ -224,6 +255,6 @@ def sending_notice():
 
 
 
-sending_notice()
+# sending_notice()
 # schedule.every(1).minute.do(bot.send_message(message.chat.id, str(parse_birds_website())))
 bot.infinity_polling()
