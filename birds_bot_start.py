@@ -1,13 +1,16 @@
 import telebot
+from telebot import types
 import os
 import csv
 import schedule
+import time
 
 from sqlalchemy import exc
 import haversine
 
 from models import session, Bird, User, UserBird, Region
 from webparser import parse_birds_website
+
 
 
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
@@ -160,7 +163,37 @@ def radius_validate(message, region):
         bot.register_next_step_handler(message, callback=radius_validate, region=region)
 
 
+@bot.message_handler(commands=['getregions'])
+def get_region(message):
+    user = session.query(User).filter(User.chat_id == message.chat.id).first()
+    regions = session.query(Region).join(User).filter(Region.user_id == user.id).all()
+    if len(regions) != 0:
+        for region in regions:
+            markup = types.InlineKeyboardMarkup()
+            msg = f'Район "{region.name}"'
+            del_btn = types.InlineKeyboardButton('Удалить', callback_data='del,'+str(region.user_id)+','+
+                                                                          str(region.name))
+            markup.add(del_btn)
+            bot.send_message(message.chat.id, msg)
+            bot.send_location(message.chat.id, region.latitude, region.longitude, horizontal_accuracy=1500,
+                              reply_markup=markup)
+
+    else:
+        bot.send_message(message.chat.id, 'У Вас нет ни одного района для отслеживания. Введите команду'
+                                          '/setregion для создания.')
+
+
+@bot.callback_query_handler(func=lambda callback: callback.data.split(',')[0] == 'del')
+def delete_region(callback):
+    user_id = callback.data.split(',')[1]
+    region_name = callback.data.split(',')[2]
+    session.query(Region).filter(Region.user_id == user_id).filter(Region.name == region_name).delete()
+    session.commit()
+    bot.send_message(callback.message.chat.id, 'Уведомление удалено!')
+
+
 def sending_notice():
+    count_sended = 0
     regions = session.query(Region).all()
     if not regions:
         return
@@ -178,7 +211,17 @@ def sending_notice():
                 UserBird.user_id == region.user_id).all()
             names_of_userbirds = [bird[0] for bird in users_list]
             filtered_list = list(filter(lambda x: x.get('scientific_name') not in names_of_userbirds, birds_in_region))
-            pass
+            if len(filtered_list) != 0:
+                user = session.query(User).filter(User.id == region.user_id).first()
+                bot.send_message(user.chat_id, f'В районе "{region.name}" замечены птицы:\n\n')
+                count_sended += 1
+                for bird in filtered_list:
+                    msg = bird.get('scientific_name')+'\n'+bird.get('url')+'\n\n'
+                    if count_sended % 50 == 0:
+                        time.sleep(1)
+                    bot.send_message(user.chat_id, msg)
+                    count_sended += 1
+
 
 
 sending_notice()
