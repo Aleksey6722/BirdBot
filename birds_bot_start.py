@@ -6,6 +6,7 @@ import schedule
 import time
 import requests
 import json
+from threading import Thread
 
 from sqlalchemy import exc
 import haversine
@@ -278,5 +279,17 @@ def sending_notice():
                     count_sended += 1
 
 
-schedule.every().day.at("17:30:00").do(sending_notice)
+def schedule_checker():
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+schedule.every().day.at("17:20:00").do(sending_notice)
+Thread(target=schedule_checker).start()
 bot.infinity_polling()
+
+
+
+
+
