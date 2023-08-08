@@ -108,6 +108,19 @@ def get_csv(message):
     os.remove(csv_file_dir)
 
 
+@bot.message_handler(commands=['start'])
+def start(message):
+    msg = 'Порядок работы с ботом:\n' \
+          '1. Создайте район (или несколько) для отслеживания птиц, следуя инструкциям команды /setregion\n' \
+          '2. Отправьте боту список ваших птиц в формате CSV (образец life list на сайте Ebird.com ).\n' \
+          'Бот будет оповещать Вас о птицах, замеченных в районах отслеживания, и которых нет в Вашем списке. ' \
+          'Возможна работа с ботом и без списка птиц, в таком случае будет приходить оповещение обо всех птицах ' \
+          'в районах отслеживания. Оповещение приходит один раз в день в конце дня. Информация берётся ' \
+          'с сайта kz.birds.watch\n' \
+          '3. Используйте команды /deletelist для удаления списка и /getregions для отображения районов\n'
+    bot.send_message(message.chat.id, msg)
+
+
 @bot.message_handler(commands=['setregion'])
 def set_name(message):
     markup = types.InlineKeyboardMarkup()
@@ -265,6 +278,5 @@ def sending_notice():
                     count_sended += 1
 
 
-# sending_notice()
-# schedule.every(1).minute.do(bot.send_message(message.chat.id, str(parse_birds_website())))
+schedule.every().day.at("17:30:00").do(sending_notice)
 bot.infinity_polling()
