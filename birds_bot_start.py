@@ -4,8 +4,7 @@ import os
 import csv
 import schedule
 import time
-import requests
-import json
+import logging
 from threading import Thread
 
 from sqlalchemy import exc
@@ -17,6 +16,13 @@ from webparser import parse_birds_website
 
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
+
+logger = logging.getLogger('BirdsLogger')
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('Birdsbot.log', mode='w')
+formatter = logging.Formatter("%(name)s %(asctime)s %(levelname)s %(message)s")
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 
 def checking_csv(csv_file_dir):
@@ -212,16 +218,15 @@ def get_region(message):
                                                                           str(region.name))
             markup.add(del_btn)
             bot.send_message(message.chat.id, msg)
-            # bot.send_location(message.chat.id, region.latitude, region.longitude, horizontal_accuracy=1500,
-            #                   reply_markup=markup)
-            url = f'https://api.telegram.org/bot{TOKEN}/sendlocation?chat_id={message.chat.id}&' \
-                  f'latitude={region.latitude}&longitude={region.longitude}'
+            bot.send_location(message.chat.id, region.latitude, region.longitude, horizontal_accuracy=1500,
+                              reply_markup=markup)
+            # url = f'https://api.telegram.org/bot{TOKEN}/sendlocation?chat_id={message.chat.id}&' \
+            #       f'latitude={region.latitude}&longitude={region.longitude}'
             # data = {'chat_id': message.chat.id,
             #         'latitude': region.latitude,
             #         'longitude': region.longitude,
             #         'reply_markup': json.dumps(markup.to_dict())}
-            request = requests.post(url).json()
-            pass
+            # request = requests.post(url).json()
     else:
         bot.send_message(message.chat.id, 'У Вас нет ни одного района для отслеживания. Введите команду '
                                           '/setregion для создания.')
@@ -233,7 +238,7 @@ def delete_region(callback):
     region_name = callback.data.split(',')[2]
     session.query(Region).filter(Region.user_id == user_id).filter(Region.name == region_name).delete()
     session.commit()
-    bot.send_message(callback.message.chat.id, 'Район удалён!')
+    bot.send_message(callback.message.chat.id, f'Район {region_name} удалён!')
 
 
 @bot.message_handler(commands=['deletelist'])
@@ -249,45 +254,51 @@ def delete_list(message):
 
 
 def sending_notice():
-    count_sended = 0
-    regions = session.query(Region).all()
-    if not regions:
-        return
-    parsing_result = parse_birds_website()
-    for region in regions:
-        birds_in_region = []
-        for bird in parsing_result:
-            bird_point = float(bird.get('latitude')), float(bird.get('longitude'))
-            region_point = float(region.latitude),  float(region.longitude)
-            dist = haversine.haversine(bird_point, region_point)*1000
-            if dist <= region.radius:
-                birds_in_region.append(bird)
-        if len(birds_in_region) != 0:
-            users_list = session.query(Bird.scientific_name).join(UserBird).filter(
-                UserBird.user_id == region.user_id).all()
-            names_of_userbirds = [bird[0] for bird in users_list]
-            filtered_list = list(filter(lambda x: x.get('scientific_name') not in names_of_userbirds, birds_in_region))
-            if len(filtered_list) != 0:
-                user = session.query(User).filter(User.id == region.user_id).first()
-                bot.send_message(user.chat_id, f'В районе "{region.name}" замечены птицы:\n\n')
-                count_sended += 1
-                for bird in filtered_list:
-                    msg = bird.get('scientific_name')+'\n'+bird.get('url')+'\n\n'
-                    if count_sended % 50 == 0:
-                        time.sleep(1)
-                    bot.send_message(user.chat_id, msg)
+    try:
+        count_sended = 0
+        regions = session.query(Region).all()
+        if not regions:
+            return
+        parsing_result = parse_birds_website()
+        for region in regions:
+            birds_in_region = []
+            for bird in parsing_result:
+                bird_point = float(bird.get('latitude')), float(bird.get('longitude'))
+                region_point = float(region.latitude),  float(region.longitude)
+                dist = haversine.haversine(bird_point, region_point)*1000
+                if dist <= region.radius:
+                    birds_in_region.append(bird)
+            if len(birds_in_region) != 0:
+                users_list = session.query(Bird.scientific_name).join(UserBird).filter(
+                    UserBird.user_id == region.user_id).all()
+                names_of_userbirds = [bird[0] for bird in users_list]
+                filtered_list = list(filter(lambda x: x.get('scientific_name') not in names_of_userbirds, birds_in_region))
+                if len(filtered_list) != 0:
+                    user = session.query(User).filter(User.id == region.user_id).first()
+                    bot.send_message(user.chat_id, f'В районе "{region.name}" замечены птицы:\n\n')
                     count_sended += 1
+                    for bird in filtered_list:
+                        msg = bird.get('scientific_name')+'\n'+bird.get('url')+'\n\n'
+                        if count_sended % 50 == 0:
+                            time.sleep(1)
+                        bot.send_message(user.chat_id, msg)
+                        count_sended += 1
+    except Exception as e:
+        logger.error(e)
 
 
 def schedule_checker():
+    schedule.every().day.at("17:20:00").do(sending_notice)
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 
-schedule.every().day.at("17:20:00").do(sending_notice)
 Thread(target=schedule_checker).start()
-bot.infinity_polling()
+try:
+    bot.infinity_polling()
+except Exception as e:
+    logger.error(e, exc_info=True)
 
 
 
