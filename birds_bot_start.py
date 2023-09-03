@@ -284,7 +284,7 @@ def sending_notice():
                         bot.send_message(user.chat_id, msg)
                         count_sended += 1
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
 
 
 schedule.every().day.at("17:20:00").do(sending_notice)
@@ -292,7 +292,10 @@ schedule.every().day.at("17:20:00").do(sending_notice)
 
 def schedule_checker():
     while True:
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            logger.error(e, exc_info=True)
         time.sleep(1)
 
 
