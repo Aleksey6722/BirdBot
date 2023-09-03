@@ -291,7 +291,6 @@ schedule.every().day.at("17:20:00").do(sending_notice)
 
 
 def schedule_checker():
-    schedule.every().day.at("17:20:00").do(sending_notice)
     while True:
         schedule.run_pending()
         time.sleep(1)
