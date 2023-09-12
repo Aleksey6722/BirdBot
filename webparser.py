@@ -4,7 +4,6 @@ import json
 
 import re
 from datetime import datetime
-from birds_bot_start import logger
 
 main_url = "https://kz.birds.watch/"
 headers = {"Accept-Language": "ru"}
