@@ -4,6 +4,7 @@ import json
 
 import re
 from datetime import datetime
+from birds_bot_start import logger
 
 main_url = "https://kz.birds.watch/"
 headers = {"Accept-Language": "ru"}
@@ -30,8 +31,11 @@ def parse_birds_website():
     news_div = soup.find('section', class_='orta').find('a', recursive=False).find_next_sibling()
     the_latest_p = news_div.find('p')
     date_tag = the_latest_p.find(string=re.compile('^\d{4}\-(0?[1-9]|1[012])\-(0?[1-9]|[12][0-9]|3[01]).$'))
+    logger.info("date_tag="+date_tag)
     today = datetime.today().strftime('%Y-%m-%d')
     date_from_page = date_tag.text.strip('.')
+    logger.info("today="+today)
+    logger.info("date_from_page="+date_from_page)
     if today != date_from_page:
         return None
     link_tags = the_latest_p.find_all('a', href=True)

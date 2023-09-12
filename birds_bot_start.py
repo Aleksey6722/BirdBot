@@ -304,8 +304,3 @@ try:
     bot.infinity_polling()
 except Exception as e:
     logger.error(e, exc_info=True)
-
-
-
-
-
