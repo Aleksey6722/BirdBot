@@ -278,7 +278,7 @@ def sending_notice():
         logger.error(e, exc_info=True)
 
 
-schedule.every().day.at("2:50:00").do(sending_notice)
+schedule.every().day.at("02:50:00").do(sending_notice)
 
 
 def schedule_checker():
