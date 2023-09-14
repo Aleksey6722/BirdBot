@@ -1,6 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-import json
+from logger import logger
 
 import re
 from datetime import datetime

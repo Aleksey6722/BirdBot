@@ -4,9 +4,8 @@ import os
 import csv
 import schedule
 import time
-import logging
 from threading import Thread
-
+from logger import logger
 from sqlalchemy import exc
 import haversine
 
@@ -16,14 +15,6 @@ from webparser import parse_birds_website
 
 TOKEN = os.getenv('BIRDS_BOT_TOKEN')
 bot = telebot.TeleBot(TOKEN)
-
-logger = logging.getLogger('BirdsLogger')
-logger.setLevel(logging.INFO)
-handler = logging.FileHandler('Birdsbot.log', mode='w')
-formatter = logging.Formatter("%(name)s %(asctime)s %(levelname)s %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
 
 def checking_csv(csv_file_dir):
     with open(csv_file_dir, 'r') as csv_file:
@@ -287,7 +278,7 @@ def sending_notice():
         logger.error(e, exc_info=True)
 
 
-schedule.every().day.at("17:20:00").do(sending_notice)
+schedule.every().day.at("2:50:00").do(sending_notice)
 
 
 def schedule_checker():
